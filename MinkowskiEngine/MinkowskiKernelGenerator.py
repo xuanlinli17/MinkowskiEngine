@@ -298,7 +298,7 @@ class KernelGenerator:
         self.kernel_stride = kernel_stride
         self.kernel_dilation = kernel_dilation
         self.region_type = region_type
-        self.region_offsets = region_offsets if region_offsets else torch.IntTensor()
+        self.region_offsets = region_offsets if region_offsets is not None else torch.IntTensor()
         self.axis_types = axis_types
         self.dimension = dimension
         self.kernel_volume = get_kernel_volume(

@@ -669,7 +669,6 @@ CoordinateMapManager<
                                    RegionType::Type const region_type,
                                    at::Tensor const &offset, bool is_transpose,
                                    bool is_pool) {
-  ASSERT(region_type != RegionType::CUSTOM, "Not implemented yet.");
   if (region_type == RegionType::CUSTOM)
     ASSERT(offset.is_cuda() ==
                !detail::is_cpu_coordinate_map<CoordinateMapType>::value,

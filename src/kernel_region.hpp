@@ -240,9 +240,12 @@ public:
     }
     break;
     
-    case RegionType::CUSTOM:
-      // TODO
-      break;
+    case RegionType::CUSTOM: {
+      for (index_type i = 1; i < m_coordinate_size; ++i) {
+	  dst_coordinate[i] = src_coordinate[i] + m_offset[kernel_index * (m_coordinate_size - 1) + (i - 1)];
+      }
+    }
+    break;
     }
   }
 
