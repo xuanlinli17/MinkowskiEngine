@@ -147,7 +147,7 @@ public:
       size_type const *kernel_size,   // size of the kernel or region
       size_type const *dilation,      // stride / dilation within kernel,
       size_type const volume = 0,     // kernel volume
-      coordinate_type const *p_offset = nullptr, // m_coordinate_size * n_offset
+      coordinate_type const *p_offset = nullptr, // (m_coordinate_size - 1) * n_offset
       uint32_t n_offset = 0,                     //
       bool is_transpose = false                  // is_transpose
       )
@@ -242,7 +242,8 @@ public:
     
     case RegionType::CUSTOM: {
       for (index_type i = 1; i < m_coordinate_size; ++i) {
-	  dst_coordinate[i] = src_coordinate[i] + m_offset[kernel_index * (m_coordinate_size - 1) + (i - 1)];
+	      dst_coordinate[i] = src_coordinate[i] + 
+          m_offset[kernel_index * (m_coordinate_size - 1) + (i - 1)];
       }
     }
     break;

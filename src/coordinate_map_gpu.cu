@@ -1501,7 +1501,13 @@ direct_kernel_map(map_type const __restrict__ in_map,                       //
   size_type *sh_kernel_size   = sh_tensor_stride + coordinate_size;
   size_type *sh_dilation      = sh_kernel_size   + coordinate_size;
 
+  coordinate_type *sh_offset     = nullptr;
   coordinate_type *sh_coordinate = reinterpret_cast<coordinate_type *>(sh_dilation + coordinate_size);
+  if (kernel.region_type() == RegionType::CUSTOM) {
+    sh_offset = sh_coordinate;
+    sh_coordinate = sh_coordinate + (coordinate_size - 1) * kernel.num_offset();
+  }
+  // coordinate_type *sh_coordinate = reinterpret_cast<coordinate_type *>(sh_dilation + coordinate_size);
   coordinate_type *sh_tmp = sh_coordinate + tx * coordinate_size;
   // clang-format on
 
@@ -1513,10 +1519,19 @@ direct_kernel_map(map_type const __restrict__ in_map,                       //
     sh_dilation[i] = kernel.dilation()[i];
   }
 
+  if (kernel.region_type() == RegionType::CUSTOM) {
+    coordinate_type const *kernel_offset = kernel.offset();
+    for (index_type i = tx; i < (coordinate_size - 1) * kernel.num_offset(); i += blockDim.x) {
+      sh_offset[i] = kernel_offset[i];
+    }
+  }
+
+
   __syncthreads();
 
+
   auto sh_kernel = gpu_kernel_region<coordinate_type>(
-      kernel, sh_tensor_stride, sh_kernel_size, sh_dilation);
+        kernel, sh_tensor_stride, sh_kernel_size, sh_dilation, sh_offset);
 
   auto const unused_key = out_map.get_unused_key();
   if (x < num_threads) {
@@ -1597,11 +1612,15 @@ CoordinateMapGPU<coordinate_type, TemplatedAllocator>::kernel_map(
                                            2 * (N + 1) * sizeof(index_type));
     LOG_DEBUG("Cleaning up");
     return kernel_map;
-  } else if (kernel_map_mode == CUDAKernelMapMode::MEMORY_EFFICIENT &&
-             kernel.region_type() != RegionType::CUSTOM) {
-    // (THREAD * D +  3 * D) * 4
+  } else if (kernel_map_mode == CUDAKernelMapMode::MEMORY_EFFICIENT) { // &&
+             // kernel.region_type() != RegionType::CUSTOM) {
+    // (THREAD * D +  3 * D + num_offset * D') * 4
+    uint32_t coord_memory_size = 3 * m_coordinate_size * sizeof(index_type); // stride, kernel, dilation
+    if (kernel.region_type() == RegionType::CUSTOM) {
+      coord_memory_size += (m_coordinate_size - 1) * kernel.num_offset() * sizeof(coordinate_type); // offset
+    }
     uint32_t const shared_memory_size_in_bytes =
-        3 * m_coordinate_size * sizeof(index_type) + // stride, kernel, dilation
+        coord_memory_size +
         thread_dim * m_coordinate_size * sizeof(coordinate_type); // tmp
     // clang-format on
     size_type const num_threads = out_size;
@@ -1667,11 +1686,15 @@ CoordinateMapGPU<coordinate_type, TemplatedAllocator>::kernel_map(
     LOG_DEBUG("cudaFree");
 
     return kernel_map;
-  } else if (kernel_map_mode == CUDAKernelMapMode::SPEED_OPTIMIZED &&
-             kernel.region_type() != RegionType::CUSTOM) {
-    // (THREAD * 3 * D +  3 * D) * 4
+  } else if (kernel_map_mode == CUDAKernelMapMode::SPEED_OPTIMIZED) { // &&
+             // kernel.region_type() != RegionType::CUSTOM) {
+    // (THREAD * 3 * D +  3 * D + num_offset * D') * 4
+    uint32_t coord_memory_size = 3 * m_coordinate_size * sizeof(index_type); // stride, kernel, dilation
+    if (kernel.region_type() == RegionType::CUSTOM) {
+      coord_memory_size += (m_coordinate_size - 1) * kernel.num_offset() * sizeof(coordinate_type); // offset
+    }
     uint32_t const shared_memory_size_in_bytes =
-        3 * m_coordinate_size * sizeof(index_type) + // stride, kernel, dilation
+        coord_memory_size + 
         (thread_dim + (thread_dim + kernel_volume - 1) / kernel_volume) *
             m_coordinate_size *
             sizeof(coordinate_type); // tmp coordinate + current coordinate
@@ -1680,6 +1703,7 @@ CoordinateMapGPU<coordinate_type, TemplatedAllocator>::kernel_map(
 
     LOG_DEBUG("num block", num_blocks);
     LOG_DEBUG("out_map size", out_map.size());
+    LOG_DEBUG("kernel_coordinate_size", kernel.coordinate_size());
     LOG_DEBUG("kernel_volume", kernel_volume);
     LOG_DEBUG("shared_memory size", shared_memory_size_in_bytes);
     LOG_DEBUG("threads dim", thread_dim);

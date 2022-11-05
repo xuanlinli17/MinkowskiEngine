@@ -669,10 +669,10 @@ CoordinateMapManager<
                                    RegionType::Type const region_type,
                                    at::Tensor const &offset, bool is_transpose,
                                    bool is_pool) {
-  if (region_type == RegionType::CUSTOM)
+  /* if (region_type == RegionType::CUSTOM)
     ASSERT(offset.is_cuda() ==
                !detail::is_cpu_coordinate_map<CoordinateMapType>::value,
-           "Invalid device for offset");
+           "Invalid device for offset"); */
 
   size_type kernel_dim = kernel_size.size();
 
